@@ -205,8 +205,10 @@ fun MidiDrumsScreen(engine: DrumEngine) {
     if (showVisualizerScreen) {
         MidiVisualizerScreen(
             slots = slots,
+            activeNote = activeNote,
             activeSlotIndex = activeSlotIndex,
             progress = progress,
+            pieces = pieces,
             onBack = { showVisualizerScreen = false }
         )
         return
