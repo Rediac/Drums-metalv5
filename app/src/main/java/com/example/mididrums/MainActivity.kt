@@ -325,7 +325,7 @@ fun MidiDrumsScreen(engine: DrumEngine) {
             modifier = Modifier.fillMaxWidth()
         )
 
-        // ─── Piano Roll de Claude en pantalla principal ───
+        // ─── Piano Roll en pantalla principal ───
         val firstLoadedSlot = slots.firstOrNull { it.parsed != null }
         if (firstLoadedSlot?.parsed != null) {
             Spacer(Modifier.height(12.dp))
@@ -333,6 +333,7 @@ fun MidiDrumsScreen(engine: DrumEngine) {
                 hits = firstLoadedSlot.parsed.hits,
                 durationMicros = firstLoadedSlot.parsed.durationMicros,
                 progress = progress,
+                pieces = pieces,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
@@ -742,7 +743,7 @@ private fun LibraryScreen(
     }
 }
 
-// ─── VISOR MIDI (PIANO ROLL CANVAS DE CLAUDE) ───────────────────────
+// ─── VISOR MIDI (PIANO ROLL AVANZADO) ───────────────────────────────
 
 @Composable
 private fun MidiVisualizerScreen(
@@ -767,6 +768,7 @@ private fun MidiVisualizerScreen(
                 hits = firstLoadedSlot.parsed.hits,
                 durationMicros = firstLoadedSlot.parsed.durationMicros,
                 progress = progress,
+                pieces = pieces,
                 modifier = Modifier.fillMaxWidth().weight(1f)
             )
         } else {
