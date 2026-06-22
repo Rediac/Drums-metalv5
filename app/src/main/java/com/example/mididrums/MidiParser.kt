@@ -2,57 +2,35 @@ package com.example.mididrums
 
 import java.io.InputStream
 
-/**
- * Representa un único golpe de batería extraído del archivo MIDI:
- * en qué momento (microsegundos desde el inicio) suena, qué nota MIDI es,
- * y con qué velocidad (intensidad, 0-127).
- */
 data class DrumHit(
     val timeMicros: Long,
     val note: Int,
-    val velocity: Int
+    val velocity: Int,
+    val channel: Int = 9  // 9 = canal de batería MIDI
 )
 
-/**
- * Resultado del parseo: la lista de golpes ordenada por tiempo, la
- * duración total del archivo en microsegundos (para saber cuándo hacer
- * loop), y el tempo original detectado en BPM (para mostrar como
- * referencia y como punto de partida del control de velocidad).
- */
 data class ParsedMidi(
     val hits: List<DrumHit>,
     val durationMicros: Long,
     val originalBpm: Double
 )
 
-/** Tipo de evento crudo leído de la pista, antes de convertir ticks a tiempo real. */
 private sealed class RawType {
     object NoteOn : RawType()
     object NoteOff : RawType()
     data class Tempo(val microsPerQuarter: Long) : RawType()
 }
 
-private data class RawEvent(val tick: Long, val type: RawType, val a: Int, val b: Int)
+private data class RawEvent(val tick: Long, val type: RawType, val a: Int, val b: Int, val channel: Int = 0)
 
-/**
- * Parser de archivos Standard MIDI File (SMF) escrito en Kotlin puro,
- * sin dependencias externas. Android no incluye javax.sound.midi, así
- * que este parser implementa lo mínimo necesario para nuestro caso de uso:
- * leer eventos Note On / Note Off y eventos de tempo, ignorando todo lo
- * demás (control changes, program changes, eventos de texto, etc.).
- *
- * Soporta formato SMF 0 (una sola pista) y formato 1 (múltiples pistas
- * que se reproducen en paralelo, típico de DAWs como exportan sus MIDIs).
- */
 object MidiParser {
 
-    private const val DEFAULT_TEMPO_MICROS_PER_QUARTER = 500_000L // 120 BPM
+    private const val DEFAULT_TEMPO_MICROS_PER_QUARTER = 500_000L
 
     fun parse(input: InputStream): ParsedMidi {
         val data = input.readBytes()
         val reader = ByteReader(data)
 
-        // --- Header chunk "MThd" ---
         val headerId = reader.readString(4)
         require(headerId == "MThd") { "No es un archivo MIDI válido (falta cabecera MThd)" }
 
@@ -127,10 +105,11 @@ object MidiParser {
                             0x90 -> {
                                 val note = reader.readUInt8()
                                 val velocity = reader.readUInt8()
+                                val channel = statusByte and 0x0F
                                 if (velocity == 0) {
                                     allTrackEvents.add(RawEvent(tick, RawType.NoteOff, note, 0))
                                 } else {
-                                    allTrackEvents.add(RawEvent(tick, RawType.NoteOn, note, velocity))
+                                    allTrackEvents.add(RawEvent(tick, RawType.NoteOn, note, velocity, channel))
                                 }
                             }
                             0xA0, 0xB0, 0xE0 -> {
@@ -177,12 +156,9 @@ object MidiParser {
                     }
                 }
                 RawType.NoteOn -> {
-                    hits.add(DrumHit(accumulatedMicros, event.a, event.b))
+                    hits.add(DrumHit(accumulatedMicros, event.a, event.b, event.channel))
                 }
-                RawType.NoteOff -> {
-                    // No necesitamos el evento de apagado para samples
-                    // one-shot de batería; se ignora a propósito.
-                }
+                RawType.NoteOff -> { }
             }
         }
 
@@ -192,18 +168,12 @@ object MidiParser {
 
         hits.sortBy { it.timeMicros }
 
-        // BPM = 60,000,000 microsegundos por minuto / microsegundos por negra
         val originalBpm = 60_000_000.0 / firstTempoMicros.toDouble()
 
         return ParsedMidi(hits, durationMicros.coerceAtLeast(1L), originalBpm)
     }
 }
 
-/**
- * Lector secuencial de bytes con soporte para los tipos de datos específicos
- * del formato SMF: enteros big-endian de 16/32 bits, y "variable length
- * quantities" (VLQ), que es la forma en que MIDI codifica los delta-times.
- */
 private class ByteReader(private val data: ByteArray) {
     var position: Int = 0
 
