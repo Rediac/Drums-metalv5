@@ -205,10 +205,8 @@ fun MidiDrumsScreen(engine: DrumEngine) {
     if (showVisualizerScreen) {
         MidiVisualizerScreen(
             slots = slots,
-            activeNote = activeNote,
             activeSlotIndex = activeSlotIndex,
             progress = progress,
-            pieces = pieces,
             onBack = { showVisualizerScreen = false }
         )
         return
@@ -324,6 +322,20 @@ fun MidiDrumsScreen(engine: DrumEngine) {
             activeNote = activeNote,
             modifier = Modifier.fillMaxWidth()
         )
+
+        // ─── Piano Roll de Claude en pantalla principal ───
+        val firstLoadedSlot = slots.firstOrNull { it.parsed != null }
+        if (firstLoadedSlot?.parsed != null) {
+            Spacer(Modifier.height(12.dp))
+            PianoRollView(
+                hits = firstLoadedSlot.parsed.hits,
+                durationMicros = firstLoadedSlot.parsed.durationMicros,
+                progress = progress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+            )
+        }
 
         Spacer(Modifier.height(20.dp))
 
@@ -728,7 +740,7 @@ private fun LibraryScreen(
     }
 }
 
-// ─── ANALIZADOR MIDI (PIANO ROLL) ────────────────────────────────────
+// ─── VISOR MIDI (PIANO ROLL CANVAS DE CLAUDE) ───────────────────────
 
 @Composable
 private fun MidiVisualizerScreen(
@@ -739,149 +751,29 @@ private fun MidiVisualizerScreen(
     pieces: List<DrumPiece>,
     onBack: () -> Unit
 ) {
-    val allHits = remember(slots) {
-        slots.flatMap { slot -> slot.parsed?.hits ?: emptyList() }
-    }
-    val maxTime = allHits.maxOfOrNull { it.timeMicros } ?: 1L
-    val currentTime = (progress * maxTime).toLong()
-
-    val allMidiNotes = remember(slots) {
-        val notes = mutableSetOf<Int>()
-        slots.forEach { slot ->
-            slot.parsed?.hits?.forEach { hit -> notes.add(hit.note) }
-        }
-        notes.sorted()
-    }
-
-    val noteToPiece = remember(pieces) { pieces.associateBy { it.note } }
-
-    val pieceColors = listOf(
-        Color(0xFF4FC3F7), Color(0xFF81C784), Color(0xFFFFB74D),
-        Color(0xFFE57373), Color(0xFFBA68C8), Color(0xFF4DD0E1),
-        Color(0xFFFFF176), Color(0xFFA1887F), Color(0xFF90A4AE),
-        Color(0xFFFF8A65), Color(0xFF7986CB)
-    )
-
-    val scrollState = rememberScrollState()
-
-    LaunchedEffect(progress) {
-        if (progress > 0f) {
-            scrollState.scrollTo((progress * 2000).toInt())
-        }
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize().padding(20.dp)
-    ) {
+    val firstLoadedSlot = slots.firstOrNull { it.parsed != null }
+    Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Volver", color = AccentBlue) }
         }
         Spacer(Modifier.height(8.dp))
-        Text("🎹 Analizador MIDI", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextWhite)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Slot: ${if (activeSlotIndex != null) "${activeSlotIndex + 1}" else "—"}  |  ${(progress * 100).toInt()}%", color = TextWhiteSoft, style = MaterialTheme.typography.bodySmall)
-            Text("${allMidiNotes.size} notas detectadas", color = AccentBlue, style = MaterialTheme.typography.bodySmall)
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        Box(
-            modifier = Modifier.fillMaxWidth().weight(1f).clip(MaterialTheme.shapes.small).background(Color(0xFF0A0A0F))
-        ) {
-            Row(modifier = Modifier.fillMaxSize().horizontalScroll(scrollState)) {
-                val totalWidth = 2000.dp
-                val rowHeight = 28.dp
-
-                Column(modifier = Modifier.width(totalWidth)) {
-                    allMidiNotes.forEachIndexed { index, note ->
-                        val piece = noteToPiece[note]
-                        val hasSample = piece != null
-                        val noteHits = allHits.filter { it.note == note }
-                        val label = piece?.label ?: "Nota $note"
-                        val colorIndex = index % pieceColors.size
-                        val noteColor = pieceColors[colorIndex]
-
-                        Box(
-                            modifier = Modifier.fillMaxWidth().height(rowHeight)
-                                .background(
-                                    when {
-                                        activeNote == note -> Color.White.copy(alpha = 0.06f)
-                                        index % 2 == 0 -> Color.White.copy(alpha = 0.02f)
-                                        else -> Color.Transparent
-                                    }
-                                )
-                        ) {
-                            Row(
-                                modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (piece != null && !hasSample) {
-                                    Box(modifier = Modifier.size(6.dp).background(Color(0xFFFF5555), CircleShape))
-                                    Spacer(Modifier.width(4.dp))
-                                }
-                                Text(label, color = if (activeNote == note) noteColor else TextWhiteSoft.copy(alpha = 0.7f), fontSize = 9.sp, maxLines = 1)
-                            }
-
-                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).align(Alignment.BottomCenter).background(TextWhiteSoft.copy(alpha = 0.05f)))
-
-                            noteHits.forEach { hit ->
-                                val position = (hit.timeMicros.toFloat() / maxTime * totalWidth.value).dp
-                                val hasPassed = hit.timeMicros <= currentTime
-                                val isHitting = activeNote == note && hit.timeMicros in (currentTime - 150000)..currentTime
-                                val velocitySize = ((hit.velocity / 127f) * 6 + 3).dp
-
-                                Box(
-                                    modifier = Modifier
-                                        .offset(x = position - 3.dp, y = rowHeight / 2 - velocitySize / 2)
-                                        .size(if (isHitting) velocitySize + 3.dp else velocitySize)
-                                        .background(
-                                            when {
-                                                piece == null -> Color(0xFFFF9800)
-                                                !hasSample -> Color(0xFFFF5555)
-                                                isHitting -> Color(0xFF00E676)
-                                                hasPassed -> noteColor.copy(alpha = 0.5f)
-                                                else -> noteColor.copy(alpha = 0.25f)
-                                            },
-                                            CircleShape
-                                        )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Box(modifier = Modifier.fillMaxHeight().width(2.dp).offset(x = (progress * 2000).dp).background(AccentBlue))
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).background(Color(0xFF00E676), CircleShape))
-                Spacer(Modifier.width(3.dp))
-                Text("Sonando", color = TextWhiteSoft, style = MaterialTheme.typography.labelSmall)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).background(Color(0xFFFF5555), CircleShape))
-                Spacer(Modifier.width(3.dp))
-                Text("Sin sample", color = TextWhiteSoft, style = MaterialTheme.typography.labelSmall)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(8.dp).background(Color(0xFFFF9800), CircleShape))
-                Spacer(Modifier.width(3.dp))
-                Text("Nota nueva", color = TextWhiteSoft, style = MaterialTheme.typography.labelSmall)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(6.dp).background(TextWhiteSoft.copy(alpha = 0.3f), CircleShape))
-                Spacer(Modifier.width(3.dp))
-                Text("Velocity", color = TextWhiteSoft, style = MaterialTheme.typography.labelSmall)
-            }
+        Text("🎹 Piano Roll", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextWhite)
+        Text("Slot: ${if (activeSlotIndex != null) "${activeSlotIndex + 1}" else "—"}  |  ${(progress * 100).toInt()}%", color = TextWhiteSoft, style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(12.dp))
+        if (firstLoadedSlot?.parsed != null) {
+            PianoRollView(
+                hits = firstLoadedSlot.parsed.hits,
+                durationMicros = firstLoadedSlot.parsed.durationMicros,
+                progress = progress,
+                modifier = Modifier.fillMaxWidth().weight(1f)
+            )
+        } else {
+            Text("Carga un MIDI para ver el piano roll", color = TextWhiteSoft, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 40.dp))
         }
     }
 }
 
-// ─── FIN ANALIZADOR MIDI ─────────────────────────────────────────────
+// ─── FIN VISOR ───────────────────────────────────────────────────────
 
 // ─── MIXER ───────────────────────────────────────────────────────────
 
