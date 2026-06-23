@@ -14,11 +14,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val NOTE_NAMES = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
@@ -51,12 +52,10 @@ fun PianoRollView(
     var scrollX by remember { mutableStateOf(0f) }
     var selectedNote by remember { mutableStateOf<PianoRollNote?>(null) }
 
-    // Lista editable de notas
     var editableNotes by remember(hits) {
         mutableStateOf(hits.map { PianoRollNote(it.timeMicros, it.note, it.velocity) })
     }
 
-    // Para arrastrar
     var draggingNote by remember { mutableStateOf<PianoRollNote?>(null) }
     var dragStartTime by remember { mutableStateOf(0L) }
     var dragStartNote by remember { mutableStateOf(0) }
@@ -82,7 +81,7 @@ fun PianoRollView(
     val noteCount = noteRange.last - noteRange.first + 1
 
     val pixelsPerMicro = 0.0005f * zoomH
-    val snapMicros = 50_000L  // Grid snap: ~1/16 de nota a 120 BPM
+    val snapMicros = 50_000L
 
     Column(modifier = modifier) {
         // Barra de herramientas
@@ -97,7 +96,6 @@ fun PianoRollView(
 
             Spacer(Modifier.width(16.dp))
 
-            // Deshacer
             TextButton(onClick = {
                 editableNotes = hits.map { PianoRollNote(it.timeMicros, it.note, it.velocity) }
                 onNotesChanged?.invoke(editableNotes)
@@ -123,31 +121,33 @@ fun PianoRollView(
             // Teclado lateral
             Box(modifier = Modifier.width(30.dp).fillMaxHeight().background(Color(0xFF0D1117))) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    val h = size.height
-                    val noteH = h / noteCount
+                    val canvasH = size.height
+                    val noteH = canvasH / noteCount
                     for (i in 0 until noteCount) {
                         val note = noteRange.last - i
-                        val y = i * noteH
+                        val noteY = i * noteH
                         val isBlack = (note % 12) in BLACK_NOTE_POSITIONS
                         val isC = note % 12 == 0
 
                         if (isBlack) {
-                            drawRect(Color(0xFF1A1A1A), Offset(0f, y), Size(size.width * 0.7f, noteH))
+                            drawRect(Color(0xFF1A1A1A), Offset(0f, noteY), Size(size.width * 0.7f, noteH))
                         } else {
-                            drawRect(Color(0xFFE0E0E0), Offset(0f, y + 0.5f), Size(size.width - 1f, noteH - 1f))
+                            drawRect(Color(0xFFE0E0E0), Offset(0f, noteY + 0.5f), Size(size.width - 1f, noteH - 1f))
                             if (isC) {
-                                drawRect(Color(0xFF4FC3F7).copy(alpha = 0.5f), Offset(size.width * 0.7f, y + noteH * 0.2f), Size(size.width * 0.25f, noteH * 0.6f))
+                                drawRect(Color(0xFF4FC3F7).copy(alpha = 0.5f), Offset(size.width * 0.7f, noteY + noteH * 0.2f), Size(size.width * 0.25f, noteH * 0.6f))
                             }
                         }
 
                         if (!isBlack) {
-                            drawLine(Color(0xFF999999), Offset(0f, y), Offset(size.width, y), 0.5f)
+                            drawLine(Color(0xFF999999), Offset(0f, noteY), Offset(size.width, noteY), 0.5f)
                         }
                     }
                 }
             }
 
             // Área de notas
+            val currentTime = (progress * durationMicros).toLong()
+            
             Box(
                 modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFF0D1117))
                     .pointerInput(Unit) {
@@ -157,13 +157,11 @@ fun PianoRollView(
                                 val noteIdx = ((offset.y) / noteH).toInt()
                                 if (noteIdx in 0 until noteCount) {
                                     val note = noteRange.last - noteIdx
-                                    val currentTime = (progress * durationMicros).toLong()
                                     val playheadX = size.width * 0.3f
                                     val timeAtTouch = ((offset.x - playheadX + currentTime * pixelsPerMicro - scrollX) / pixelsPerMicro).toLong()
-                                    
-                                    // Buscar nota cercana para arrastrar
+
                                     val hit = editableNotes.find {
-                                        kotlin.math.abs(it.timeMicros - timeAtTouch) < 200_000L && it.note == note
+                                        abs(it.timeMicros - timeAtTouch) < 200_000L && it.note == note
                                     }
                                     if (hit != null) {
                                         draggingNote = hit
@@ -175,9 +173,8 @@ fun PianoRollView(
                             },
                             onDragEnd = {
                                 if (draggingNote != null && isLongPress) {
-                                    // Eliminar nota (arrastró lejos)
                                     val idx = editableNotes.indexOf(draggingNote)
-                                    if (idx >= 0 && kotlin.math.abs(draggingNote!!.timeMicros - dragStartTime) > 500_000L) {
+                                    if (idx >= 0 && abs(draggingNote!!.timeMicros - dragStartTime) > 500_000L) {
                                         editableNotes = editableNotes.toMutableList().apply { removeAt(idx) }
                                     }
                                 }
@@ -191,17 +188,15 @@ fun PianoRollView(
                             }
                         ) { _, dragAmount ->
                             if (draggingNote != null) {
-                                // Verificar long press
                                 if (System.currentTimeMillis() - longPressTime > 500) {
                                     isLongPress = true
                                 }
 
                                 val idx = editableNotes.indexOf(draggingNote)
                                 if (idx >= 0) {
-                                    val newTime = (dragStartTime + (dragAmount.x / pixelsPerMicro).toLong())
-                                        .coerceAtLeast(0)
+                                    val newTime = (dragStartTime + (dragAmount.x / pixelsPerMicro).toLong()).coerceAtLeast(0)
                                     val snappedTime = (newTime / snapMicros) * snapMicros
-                                    
+
                                     val noteH = (size.height / noteCount)
                                     val noteDelta = -(dragAmount.y / noteH).roundToInt()
                                     val newNote = (dragStartNote + noteDelta).coerceIn(noteRange.first, noteRange.last)
@@ -222,12 +217,10 @@ fun PianoRollView(
                                 val noteIdx = ((offset.y) / noteH).toInt()
                                 if (noteIdx in 0 until noteCount) {
                                     val note = noteRange.last - noteIdx
-                                    val currentTime = (progress * durationMicros).toLong()
                                     val playheadX = size.width * 0.3f
                                     val timeAtTouch = ((offset.x - playheadX + currentTime * pixelsPerMicro - scrollX) / pixelsPerMicro).toLong()
                                     val snappedTime = (timeAtTouch / snapMicros) * snapMicros
-                                    
-                                    // Crear nueva nota
+
                                     val newNote = PianoRollNote(snappedTime.coerceAtLeast(0), note, 100)
                                     editableNotes = editableNotes.toMutableList().apply {
                                         add(newNote)
@@ -241,12 +234,11 @@ fun PianoRollView(
                                 val noteIdx = ((offset.y) / noteH).toInt()
                                 if (noteIdx in 0 until noteCount) {
                                     val note = noteRange.last - noteIdx
-                                    val currentTime = (progress * durationMicros).toLong()
                                     val playheadX = size.width * 0.3f
                                     val timeAtTouch = ((offset.x - playheadX + currentTime * pixelsPerMicro - scrollX) / pixelsPerMicro).toLong()
 
                                     val hit = editableNotes.find {
-                                        kotlin.math.abs(it.timeMicros - timeAtTouch) < 200_000L && it.note == note
+                                        abs(it.timeMicros - timeAtTouch) < 200_000L && it.note == note
                                     }
                                     selectedNote = hit
                                 }
@@ -259,30 +251,26 @@ fun PianoRollView(
                     val h = size.height
                     val noteH = h / noteCount
                     val playheadX = w * 0.3f
-                    val currentTime = (progress * durationMicros).toLong()
 
-                    // Fondo
                     drawRect(Color(0xFF0D1117), Offset.Zero, Size(w, h))
 
-                    // Líneas horizontales
                     for (i in 0..noteCount) {
-                        val y = i * noteH
-                        drawLine(Color.White.copy(alpha = 0.06f), Offset(0f, y), Offset(w, y), 0.5f)
+                        val lineY = i * noteH
+                        drawLine(Color.White.copy(alpha = 0.06f), Offset(0f, lineY), Offset(w, lineY), 0.5f)
                     }
 
-                    // Notas
                     editableNotes.forEach { note ->
                         val noteIdx = noteRange.last - note.note
                         if (noteIdx < 0 || noteIdx >= noteCount) return@forEach
 
-                        val x = (note.timeMicros * pixelsPerMicro) + playheadX - (currentTime * pixelsPerMicro) + scrollX
-                        val y = noteIdx * noteH
+                        val noteX = (note.timeMicros * pixelsPerMicro) + playheadX - (currentTime * pixelsPerMicro) + scrollX
+                        val noteY = noteIdx * noteH
                         val noteColor = noteToColor[note.note] ?: PIECE_COLORS.last()
                         val noteWidth = (noteH * 4f).coerceAtLeast(6f)
                         val hasPassed = note.timeMicros <= currentTime
                         val alpha = if (hasPassed) 0.6f else (note.velocity / 127f).coerceIn(0.4f, 1f)
 
-                        if (x + noteWidth > 0 && x < w) {
+                        if (noteX + noteWidth > 0 && noteX < w) {
                             val isSelected = selectedNote == note
                             val isDragging = draggingNote == note
 
@@ -292,25 +280,23 @@ fun PianoRollView(
                                     isSelected -> Color.White
                                     else -> noteColor.copy(alpha = alpha)
                                 },
-                                topLeft = Offset(x, y + noteH * 0.05f),
+                                topLeft = Offset(noteX, noteY + noteH * 0.05f),
                                 size = Size(noteWidth, noteH * 0.9f),
                                 cornerRadius = CornerRadius(3f, 3f)
                             )
 
-                            // Borde si está seleccionada
                             if (isSelected) {
                                 drawRoundRect(
                                     color = Color(0xFF4FC3F7),
-                                    topLeft = Offset(x, y + noteH * 0.05f),
+                                    topLeft = Offset(noteX, noteY + noteH * 0.05f),
                                     size = Size(noteWidth, noteH * 0.9f),
                                     cornerRadius = CornerRadius(3f, 3f),
-                                    style = androidx.compose.ui.graphics.drawscope.Stroke(2f)
+                                    style = Stroke(2f)
                                 )
                             }
                         }
                     }
 
-                    // Línea de playback
                     drawLine(
                         color = Color(0xFFFF4444),
                         start = Offset(playheadX, 0f),
@@ -318,7 +304,6 @@ fun PianoRollView(
                         strokeWidth = 2f
                     )
 
-                    // Triángulo
                     val trianglePath = Path().apply {
                         moveTo(playheadX, 0f)
                         lineTo(playheadX - 6f, 10f)
