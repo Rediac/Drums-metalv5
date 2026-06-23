@@ -105,6 +105,10 @@ fun MidiDrumsScreen(engine: DrumEngine) {
         engine.loadSamples(pieces)
     }
 
+    LaunchedEffect(masterVolume) {
+        engine.masterVolume = masterVolume
+    }
+
     engine.onProgress = { p -> progress = p }
     engine.onNoteTriggered = { note -> activeNote = note }
     engine.onSlotChanged = { index -> activeSlotIndex = index }
