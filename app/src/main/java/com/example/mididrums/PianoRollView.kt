@@ -1,5 +1,6 @@
 package com.example.mididrums
 
+import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -15,11 +16,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import kotlin.math.max
 
 private val NOTE_NAMES = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 private val BLACK_NOTE_POSITIONS = setOf(1, 3, 6, 8, 10)
@@ -89,7 +92,6 @@ fun PianoRollView(
             TextButton(onClick = { zoomH = (zoomH / 1.3f).coerceAtLeast(0.2f) }) { Text("−", color = Color(0xFF4FC3F7)) }
             Spacer(Modifier.width(8.dp))
 
-            // Botón PLAY/EDIT
             Button(
                 onClick = { isEditMode = !isEditMode },
                 colors = ButtonDefaults.buttonColors(
@@ -118,6 +120,7 @@ fun PianoRollView(
         }
 
         Row(modifier = Modifier.weight(1f)) {
+            // Teclado lateral con nombres de piezas
             Box(modifier = Modifier.width(30.dp).fillMaxHeight().background(Color(0xFF0D1117))) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val canvasH = size.height
@@ -126,12 +129,44 @@ fun PianoRollView(
                         val note = noteRange.last - i
                         val noteY = i * noteH
                         val isBlack = (note % 12) in BLACK_NOTE_POSITIONS
-                        if (isBlack) drawRect(Color(0xFF1A1A1A), Offset(0f, noteY), Size(size.width * 0.7f, noteH))
-                        else {
-                            drawRect(Color(0xFFE0E0E0), Offset(0f, noteY + 0.5f), Size(size.width - 1f, noteH - 1f))
-                            if (note % 12 == 0) drawRect(Color(0xFF4FC3F7).copy(alpha = 0.5f), Offset(size.width * 0.7f, noteY + noteH * 0.2f), Size(size.width * 0.25f, noteH * 0.6f))
+                        val piece = pieces.find { it.note == note }
+                        val hasSample = piece != null
+
+                        if (isBlack) {
+                            drawRect(Color(0xFF1A1A1A), Offset(0f, noteY), Size(size.width * 0.7f, noteH))
+                        } else {
+                            drawRect(
+                                if (hasSample) noteToColor[note] ?: Color(0xFFE0E0E0)
+                                else Color(0xFFFF5555).copy(alpha = 0.3f),
+                                Offset(0f, noteY + 0.5f),
+                                Size(size.width - 1f, noteH - 1f)
+                            )
+                            if (note % 12 == 0) {
+                                drawRect(
+                                    Color(0xFF4FC3F7).copy(alpha = 0.5f),
+                                    Offset(size.width * 0.7f, noteY + noteH * 0.2f),
+                                    Size(size.width * 0.25f, noteH * 0.6f)
+                                )
+                            }
+                            // Nombre de la pieza al lado
+                            if (piece != null && noteH > 8f) {
+                                drawContext.canvas.nativeCanvas.drawText(
+                                    piece.label.take(4),
+                                    size.width + 4f,
+                                    noteY + noteH * 0.7f,
+                                    Paint().apply {
+                                        color = if (hasSample) android.graphics.Color.WHITE else android.graphics.Color.RED
+                                        textSize = max(noteH * 0.5f, 6f)
+                                        isAntiAlias = true
+                                        textAlign = Paint.Align.LEFT
+                                    }
+                                )
+                            }
                         }
-                        if (!isBlack) drawLine(Color(0xFF999999), Offset(0f, noteY), Offset(size.width, noteY), 0.5f)
+
+                        if (!isBlack) {
+                            drawLine(Color(0xFF999999), Offset(0f, noteY), Offset(size.width, noteY), 0.5f)
+                        }
                     }
                 }
             }
@@ -155,7 +190,6 @@ fun PianoRollView(
                                 val timeAtTouch = ((tapOffset.x - playheadX + currentTime * pixelsPerMicro - scrollX) / pixelsPerMicro).toLong()
 
                                 if (isEditMode) {
-                                    // Crear nueva nota en modo EDIT
                                     val snappedTime = (timeAtTouch / snapMicros) * snapMicros
                                     val newNote = EditableNote(snappedTime.coerceAtLeast(0), note, 100)
                                     editableNotes = editableNotes.toMutableList().apply {
@@ -164,7 +198,6 @@ fun PianoRollView(
                                     }
                                     onNotesChanged?.invoke(editableNotes)
                                 } else {
-                                    // Seleccionar nota en modo PLAY
                                     selectedNote = displayNotes.find {
                                         abs(it.timeMicros - timeAtTouch) < 200_000L && it.note == note
                                     }
