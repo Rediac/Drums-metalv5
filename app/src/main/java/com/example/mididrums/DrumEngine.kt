@@ -29,6 +29,9 @@ class DrumEngine(private val context: Context) {
     var onNoteTriggered: ((Int) -> Unit)? = null
     var onSlotChanged: ((Int) -> Unit)? = null
 
+    // Master volume controlado desde el Mixer
+    var masterVolume: Float = 1f
+
     fun initialize() {
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -203,7 +206,8 @@ class DrumEngine(private val context: Context) {
         // Volumen del mixer por pieza
         val pieceVolume = noteToVolume[note] ?: 1f
 
-        val finalVolume = (baseVolume * volumeMultiplier * pieceVolume).coerceIn(0.05f, 1f)
+        // Volumen final con master
+        val finalVolume = (baseVolume * volumeMultiplier * pieceVolume * masterVolume).coerceIn(0.05f, 1f)
         pool.play(soundId, finalVolume, finalVolume, 1, 0, 1f)
     }
 
