@@ -97,6 +97,9 @@ fun MidiDrumsScreen(engine: DrumEngine) {
     var activeSlotIndex by remember { mutableStateOf<Int?>(null) }
     var pendingLibraryFile by remember { mutableStateOf<MidiLibraryNode.File?>(null) }
 
+    // Notas editadas por slot (índice -> lista de DrumHit)
+    var editedHits by remember { mutableStateOf<Map<Int, List<DrumHit>>>(emptyMap()) }
+
     LaunchedEffect(pieces) {
         engine.loadSamples(pieces)
     }
@@ -106,9 +109,12 @@ fun MidiDrumsScreen(engine: DrumEngine) {
     engine.onSlotChanged = { index -> activeSlotIndex = index }
 
     fun buildChainConfigs(): List<ChainSlotConfig> =
-        slots.map { slot ->
+        slots.mapIndexed { index, slot ->
+            val customHits = editedHits[index]?.map {
+                DrumHit(it.timeMicros, it.note, it.velocity, 9)
+            }
             ChainSlotConfig(
-                hits = slot.parsed?.hits ?: emptyList(),
+                hits = customHits ?: (slot.parsed?.hits ?: emptyList()),
                 durationMicros = slot.parsed?.durationMicros ?: 0L,
                 speedFactor = slot.speedFactor,
                 offsetMs = slot.offsetMs
@@ -209,6 +215,12 @@ fun MidiDrumsScreen(engine: DrumEngine) {
             activeSlotIndex = activeSlotIndex,
             progress = progress,
             pieces = pieces,
+            editedHits = editedHits,
+            onNotesChanged = { slotIndex, notes ->
+                editedHits = editedHits + (slotIndex to notes.map {
+                    DrumHit(it.timeMicros, it.note, it.velocity, 9)
+                })
+            },
             onBack = { showVisualizerScreen = false }
         )
         return
@@ -327,6 +339,7 @@ fun MidiDrumsScreen(engine: DrumEngine) {
 
         // ─── Piano Roll en pantalla principal ───
         val firstLoadedSlot = slots.firstOrNull { it.parsed != null }
+        val firstLoadedIndex = slots.indexOfFirst { it.parsed != null }
         if (firstLoadedSlot?.parsed != null) {
             Spacer(Modifier.height(12.dp))
             PianoRollView(
@@ -334,6 +347,11 @@ fun MidiDrumsScreen(engine: DrumEngine) {
                 durationMicros = firstLoadedSlot.parsed.durationMicros,
                 progress = progress,
                 pieces = pieces,
+                onNotesChanged = { notes ->
+                    editedHits = editedHits + (firstLoadedIndex to notes.map {
+                        DrumHit(it.timeMicros, it.note, it.velocity, 9)
+                    })
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
@@ -743,7 +761,7 @@ private fun LibraryScreen(
     }
 }
 
-// ─── VISOR MIDI (PIANO ROLL AVANZADO) ───────────────────────────────
+// ─── VISOR MIDI ─────────────────────────────────────────────────────
 
 @Composable
 private fun MidiVisualizerScreen(
@@ -752,9 +770,12 @@ private fun MidiVisualizerScreen(
     activeSlotIndex: Int?,
     progress: Float,
     pieces: List<DrumPiece>,
+    editedHits: Map<Int, List<DrumHit>>,
+    onNotesChanged: (Int, List<EditableNote>) -> Unit,
     onBack: () -> Unit
 ) {
     val firstLoadedSlot = slots.firstOrNull { it.parsed != null }
+    val firstLoadedIndex = slots.indexOfFirst { it.parsed != null }
     Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Volver", color = AccentBlue) }
@@ -769,6 +790,9 @@ private fun MidiVisualizerScreen(
                 durationMicros = firstLoadedSlot.parsed.durationMicros,
                 progress = progress,
                 pieces = pieces,
+                onNotesChanged = { notes ->
+                    onNotesChanged(firstLoadedIndex, notes)
+                },
                 modifier = Modifier.fillMaxWidth().weight(1f)
             )
         } else {
