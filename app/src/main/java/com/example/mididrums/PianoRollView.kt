@@ -325,5 +325,9 @@ fun PianoRollView(
             Text("✋ Arrastrar = mover", color = Color.White.copy(alpha = 0.4f), fontSize = 9.sp)
             Text("🗑️ Arrastrar lejos = borrar", color = Color.White.copy(alpha = 0.4f), fontSize = 9.sp)
         }
+
+
+
+        
     }
 }
