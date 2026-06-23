@@ -466,12 +466,36 @@ fun MidiDrumsScreen(engine: DrumEngine) {
         }
         Spacer(Modifier.height(8.dp))
 
-        pieces.forEach { piece ->
+        pieces.filter { !it.id.startsWith("custom") }.forEach { piece ->
             PieceRow(
                 piece = piece,
                 onSampleSelected = { uri ->
                     SamplePrefs.saveSampleUri(context, piece.id, uri?.toString())
                     pieces = SamplePrefs.loadPieces(context)
+                }
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ─── Slots Personalizados ───
+        Text("Slots personalizados", style = MaterialTheme.typography.titleMedium, color = TextWhite)
+        Spacer(Modifier.height(4.dp))
+        Text("Cargá samples y asignales una nota MIDI", style = MaterialTheme.typography.bodySmall, color = TextWhiteSoft)
+        Spacer(Modifier.height(8.dp))
+
+        val customPieces = pieces.filter { it.id.startsWith("custom") }
+        customPieces.forEach { piece ->
+            CustomSlotRow(
+                piece = piece,
+                onSampleSelected = { uri ->
+                    SamplePrefs.saveSampleUri(context, piece.id, uri?.toString())
+                    pieces = SamplePrefs.loadPieces(context)
+                },
+                onNoteChanged = { newNote ->
+                    SamplePrefs.saveNote(context, piece.id, newNote)
+                    pieces = SamplePrefs.loadPieces(context)
+                    engine.loadSamples(pieces)
                 }
             )
         }
@@ -1010,7 +1034,7 @@ private fun MappingScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        localPieces.forEach { piece ->
+        localPieces.filter { !it.id.startsWith("custom") }.forEach { piece ->
             var noteText by remember(piece.id) { mutableStateOf(piece.note.toString()) }
 
             Row(
@@ -1080,5 +1104,73 @@ private fun MappingScreen(
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+// ─── SLOTS PERSONALIZADOS ────────────────────────────────────────────
+
+@Composable
+private fun CustomSlotRow(
+    piece: DrumPiece,
+    onSampleSelected: (Uri?) -> Unit,
+    onNoteChanged: (Int) -> Unit
+) {
+    val samplePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onSampleSelected(uri)
+        }
+    }
+
+    var noteText by remember(piece.id) { mutableStateOf(if (piece.note == 0) "" else piece.note.toString()) }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        color = Color.White.copy(alpha = 0.05f),
+        shape = MaterialTheme.shapes.small
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(piece.label, color = TextWhite, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    if (piece.sampleUri != null) "Sample cargado" else "Sin sample",
+                    color = TextWhiteSoft,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { newValue ->
+                        if (newValue.isEmpty() || (newValue.all { it.isDigit() } && newValue.length <= 3)) {
+                            noteText = newValue
+                            val noteInt = newValue.toIntOrNull()
+                            if (noteInt != null && noteInt in 0..127) {
+                                onNoteChanged(noteInt)
+                            }
+                        }
+                    },
+                    modifier = Modifier.width(60.dp),
+                    singleLine = true,
+                    placeholder = { Text("Nota", color = TextWhiteSoft, fontSize = 10.sp) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedBorderColor = AccentBlue,
+                        unfocusedBorderColor = TextWhiteSoft
+                    )
+                )
+
+                TextButton(onClick = { samplePickerLauncher.launch(arrayOf("audio/*")) }) {
+                    Text(if (piece.sampleUri != null) "Cambiar" else "Cargar", color = AccentBlue, fontSize = 12.sp)
+                }
+            }
+        }
     }
 }
