@@ -21,7 +21,8 @@ object SamplePrefs {
         "crash1" to "sounds/Crash.mp3",
         "crash2" to "sounds/Crash2.wav",
         "ride" to "sounds/Ride.mp3",
-        "china" to "sounds/China.mp3"
+        "china" to "sounds/China.mp3",
+        "nota26" to "sounds/Ride.mp3"  // Usa Ride como sonido temporal
     )
 
     fun loadPieces(context: Context): List<DrumPiece> {
@@ -37,7 +38,8 @@ object SamplePrefs {
             DrumPiece("crash1", "Crash 1", 49),
             DrumPiece("crash2", "Crash 2", 57),
             DrumPiece("ride", "Ride", 52),
-            DrumPiece("china", "China", 55)
+            DrumPiece("china", "China", 55),
+            DrumPiece("nota26", "Nota 26", 26)
         ).map { piece ->
             val savedUri = prefs.getString(KEY_SAMPLE_URI_PREFIX + piece.id, null)
             val savedNote = prefs.getInt(KEY_NOTE_PREFIX + piece.id, piece.note)
