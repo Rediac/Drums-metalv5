@@ -120,8 +120,8 @@ fun PianoRollView(
         }
 
         Row(modifier = Modifier.weight(1f)) {
-            // Teclado lateral (piano + nombres)
-            Box(modifier = Modifier.width(100.dp).fillMaxHeight().background(Color(0xFF0D1117))) {
+            // Teclado lateral (piano + nombres + números de nota)
+            Box(modifier = Modifier.width(110.dp).fillMaxHeight().background(Color(0xFF0D1117))) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val canvasH = size.height
                     val noteH = canvasH / noteCount
@@ -131,33 +131,43 @@ fun PianoRollView(
                         val isBlack = (note % 12) in BLACK_NOTE_POSITIONS
 
                         if (isBlack) {
-                            drawRect(Color(0xFF1A1A1A), Offset(0f, noteY), Size(size.width * 0.6f, noteH))
+                            drawRect(Color(0xFF1A1A1A), Offset(0f, noteY), Size(size.width * 0.5f, noteH))
                         } else {
-                            drawRect(Color(0xFFE0E0E0), Offset(0f, noteY + 0.5f), Size(size.width * 0.6f, noteH - 1f))
+                            drawRect(Color(0xFFE0E0E0), Offset(0f, noteY + 0.5f), Size(size.width * 0.5f, noteH - 1f))
                             if (note % 12 == 0) {
                                 drawRect(
                                     Color(0xFF4FC3F7).copy(alpha = 0.5f),
-                                    Offset(size.width * 0.55f, noteY + noteH * 0.2f),
-                                    Size(size.width * 0.1f, noteH * 0.6f)
+                                    Offset(size.width * 0.45f, noteY + noteH * 0.2f),
+                                    Size(size.width * 0.08f, noteH * 0.6f)
                                 )
                             }
                         }
 
                         if (!isBlack) {
-                            drawLine(Color(0xFF999999), Offset(0f, noteY), Offset(size.width * 0.6f, noteY), 0.5f)
+                            drawLine(Color(0xFF999999), Offset(0f, noteY), Offset(size.width * 0.5f, noteY), 0.5f)
                         }
 
-                        // Nombre de la pieza
+                        // Nombre de la pieza + número de nota
                         val piece = pieces.find { it.note == note }
-                        if (piece != null && noteH > 8f) {
+                        if (noteH > 8f) {
+                            val displayText = if (piece != null) {
+                                "${piece.label} (${note})"
+                            } else {
+                                "${NOTE_NAMES[note % 12]}${note / 12 - 2} (${note})"
+                            }
                             drawContext.canvas.nativeCanvas.drawText(
-                                piece.label,
-                                size.width * 0.65f,
+                                displayText,
+                                size.width * 0.55f,
                                 noteY + noteH * 0.65f,
                                 Paint().apply {
-                                    color = if (piece.sampleUri != null || SamplePrefs.getDefaultAssetPath(piece.id) != null)
-                                        android.graphics.Color.WHITE else android.graphics.Color.RED
-                                    textSize = max(noteH * 0.45f, 7f)
+                                    color = if (piece != null) {
+                                        if (piece.sampleUri != null || SamplePrefs.getDefaultAssetPath(piece.id) != null)
+                                            android.graphics.Color.WHITE
+                                        else android.graphics.Color.RED
+                                    } else {
+                                        android.graphics.Color.GRAY
+                                    }
+                                    textSize = max(noteH * 0.4f, 6f)
                                     isAntiAlias = true
                                     textAlign = Paint.Align.LEFT
                                 }
