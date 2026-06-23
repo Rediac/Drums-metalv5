@@ -96,6 +96,7 @@ fun MidiDrumsScreen(engine: DrumEngine) {
     var activeNote by remember { mutableStateOf<Int?>(null) }
     var activeSlotIndex by remember { mutableStateOf<Int?>(null) }
     var pendingLibraryFile by remember { mutableStateOf<MidiLibraryNode.File?>(null) }
+    var masterVolume by remember { mutableStateOf(1f) }
 
     // Notas editadas por slot (índice -> lista de DrumHit)
     var editedHits by remember { mutableStateOf<Map<Int, List<DrumHit>>>(emptyMap()) }
@@ -229,6 +230,8 @@ fun MidiDrumsScreen(engine: DrumEngine) {
     if (showMixerScreen) {
         MixerScreen(
             pieces = pieces,
+            masterVolume = masterVolume,
+            onMasterVolumeChanged = { masterVolume = it },
             onVolumeChanged = { pieceId, newVolume ->
                 SamplePrefs.saveVolume(context, pieceId, newVolume)
                 pieces = SamplePrefs.loadPieces(context)
@@ -832,6 +835,8 @@ private fun MidiVisualizerScreen(
 @Composable
 private fun MixerScreen(
     pieces: List<DrumPiece>,
+    masterVolume: Float,
+    onMasterVolumeChanged: (Float) -> Unit,
     onVolumeChanged: (String, Float) -> Unit,
     onBack: () -> Unit
 ) {
@@ -841,58 +846,42 @@ private fun MixerScreen(
             .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = onBack) {
-                Text("← Volver", color = AccentBlue)
-            }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("← Volver", color = AccentBlue) }
         }
         Spacer(Modifier.height(8.dp))
-        Text(
-            "🎛️ Mixer",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = TextWhite
-        )
+        Text("🎛️ Mixer", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextWhite)
+
+        Spacer(Modifier.height(20.dp))
+
+        // MASTER
+        Text("🔊 MASTER", color = AccentBlue, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Slider(value = masterVolume, onValueChange = onMasterVolumeChanged, modifier = Modifier.weight(1f),
+                colors = SliderDefaults.colors(thumbColor = AccentBlue, activeTrackColor = AccentBlue, inactiveTrackColor = TextWhiteSoft.copy(alpha = 0.3f)))
+            Text("${(masterVolume * 100).toInt()}%", color = TextWhite, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(45.dp))
+        }
 
         Spacer(Modifier.height(24.dp))
 
+        // PIEZAS
+        Text("Piezas", color = AccentBlue, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(8.dp))
+
         pieces.forEach { piece ->
             var pieceVolume by remember(piece.id) { mutableStateOf(piece.volume) }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    piece.label,
-                    color = TextWhite,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.width(100.dp)
-                )
-                Slider(
-                    value = pieceVolume,
-                    onValueChange = { newVolume ->
-                        pieceVolume = newVolume
-                        onVolumeChanged(piece.id, newVolume)
-                    },
-                    modifier = Modifier.weight(1f),
+            val isCustom = piece.id.startsWith("custom")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(piece.label, color = TextWhite, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(100.dp))
+                Slider(value = pieceVolume, onValueChange = { pieceVolume = it; onVolumeChanged(piece.id, it) }, modifier = Modifier.weight(1f),
                     colors = SliderDefaults.colors(
-                        thumbColor = AccentBlue,
-                        activeTrackColor = AccentBlue,
-                        inactiveTrackColor = TextWhiteSoft.copy(alpha = 0.3f)
-                    )
-                )
-                Text(
-                    "${(pieceVolume * 100).toInt()}%",
-                    color = TextWhiteSoft,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.width(40.dp)
-                )
+                        thumbColor = if (isCustom) Color(0xFFFF9800) else Color.White,
+                        activeTrackColor = if (isCustom) Color(0xFFFF9800) else Color.White,
+                        inactiveTrackColor = TextWhiteSoft.copy(alpha = 0.3f)))
+                Text("${(pieceVolume * 100).toInt()}%", color = TextWhiteSoft, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(40.dp))
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
         }
 
         Spacer(Modifier.height(24.dp))
