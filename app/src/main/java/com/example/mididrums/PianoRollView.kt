@@ -120,8 +120,8 @@ fun PianoRollView(
         }
 
         Row(modifier = Modifier.weight(1f)) {
-            // Teclado lateral con nombres de piezas
-            Box(modifier = Modifier.width(30.dp).fillMaxHeight().background(Color(0xFF0D1117))) {
+            // Teclado lateral (piano + nombres)
+            Box(modifier = Modifier.width(100.dp).fillMaxHeight().background(Color(0xFF0D1117))) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val canvasH = size.height
                     val noteH = canvasH / noteCount
@@ -129,43 +129,39 @@ fun PianoRollView(
                         val note = noteRange.last - i
                         val noteY = i * noteH
                         val isBlack = (note % 12) in BLACK_NOTE_POSITIONS
-                        val piece = pieces.find { it.note == note }
-                        val hasSample = piece != null
 
                         if (isBlack) {
-                            drawRect(Color(0xFF1A1A1A), Offset(0f, noteY), Size(size.width * 0.7f, noteH))
+                            drawRect(Color(0xFF1A1A1A), Offset(0f, noteY), Size(size.width * 0.6f, noteH))
                         } else {
-                            drawRect(
-                                if (hasSample) noteToColor[note] ?: Color(0xFFE0E0E0)
-                                else Color(0xFFFF5555).copy(alpha = 0.3f),
-                                Offset(0f, noteY + 0.5f),
-                                Size(size.width - 1f, noteH - 1f)
-                            )
+                            drawRect(Color(0xFFE0E0E0), Offset(0f, noteY + 0.5f), Size(size.width * 0.6f, noteH - 1f))
                             if (note % 12 == 0) {
                                 drawRect(
                                     Color(0xFF4FC3F7).copy(alpha = 0.5f),
-                                    Offset(size.width * 0.7f, noteY + noteH * 0.2f),
-                                    Size(size.width * 0.25f, noteH * 0.6f)
-                                )
-                            }
-                            // Nombre de la pieza al lado
-                            if (piece != null && noteH > 8f) {
-                                drawContext.canvas.nativeCanvas.drawText(
-                                    piece.label.take(4),
-                                    size.width + 4f,
-                                    noteY + noteH * 0.7f,
-                                    Paint().apply {
-                                        color = if (hasSample) android.graphics.Color.WHITE else android.graphics.Color.RED
-                                        textSize = max(noteH * 0.5f, 6f)
-                                        isAntiAlias = true
-                                        textAlign = Paint.Align.LEFT
-                                    }
+                                    Offset(size.width * 0.55f, noteY + noteH * 0.2f),
+                                    Size(size.width * 0.1f, noteH * 0.6f)
                                 )
                             }
                         }
 
                         if (!isBlack) {
-                            drawLine(Color(0xFF999999), Offset(0f, noteY), Offset(size.width, noteY), 0.5f)
+                            drawLine(Color(0xFF999999), Offset(0f, noteY), Offset(size.width * 0.6f, noteY), 0.5f)
+                        }
+
+                        // Nombre de la pieza
+                        val piece = pieces.find { it.note == note }
+                        if (piece != null && noteH > 8f) {
+                            drawContext.canvas.nativeCanvas.drawText(
+                                piece.label,
+                                size.width * 0.65f,
+                                noteY + noteH * 0.65f,
+                                Paint().apply {
+                                    color = if (piece.sampleUri != null || SamplePrefs.getDefaultAssetPath(piece.id) != null)
+                                        android.graphics.Color.WHITE else android.graphics.Color.RED
+                                    textSize = max(noteH * 0.45f, 7f)
+                                    isAntiAlias = true
+                                    textAlign = Paint.Align.LEFT
+                                }
+                            )
                         }
                     }
                 }
